@@ -1,0 +1,16 @@
+{application, dojo,
+ [
+  {description, "dojo server"},
+  {vsn, "1"},
+  {registered, [dojo_server,dojo_storage]},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  sasl,
+                  ranch,
+                  cowlib,
+                  cowboy
+  ]},
+  {mod, { dojo_app, []}},
+  {env, []}
+ ]}.
