@@ -2,7 +2,7 @@
  [
   {description, "dojo server"},
   {vsn, "1"},
-  {registered, [dojo_server,dojo_storage]},
+  {registered, [dojo_server,dojo_storage, dojo_logger]},
   {applications, [
                   kernel,
                   stdlib,

@@ -20,21 +20,21 @@ start_link(Ref, Socket, Transport, Opts) ->
 
 init(Ref, Socket, Transport, _Opts = []) ->
   ok = ranch:accept_ack(Ref),
-  ?Log(["accepted TCP"]),
+  dojo_logger:log(["accepted TCP"]),
 
   loop(Socket, Transport).
 
 loop(Socket, Transport) ->
   case Transport:recv(Socket, 0, 5000) of
     {ok, Data} ->
-      ?Log(["received TCP data ",Data]),
+      dojo_logger:log(["received TCP data ",Data]),
       {ok, {ClientHost, _ClientPort}} = Transport:peername(Socket),
       parse_tcp_binary(Data, ClientHost),
       loop(Socket, Transport);
     {error, timeout} ->
       loop(Socket, Transport);
     Any ->
-      ?Log(["Unknown Tcp mesage~p~n", Any]),
+      dojo_logger:log(["Unknown Tcp mesage~p~n", Any]),
       ok = Transport:close(Socket)
   end.
 
@@ -49,6 +49,6 @@ parse_tcp_binary(BinData, ClientHost)->
     1 ->
       dojo_server:register_actuator(Data, ClientHost);
     Any ->
-      ?Log(["unknown TCP command ", Any])
+      dojo_logger:log(["unknown TCP command ", Any])
   end,
   parse_tcp_binary(RemainBin, ClientHost).

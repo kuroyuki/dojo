@@ -16,6 +16,7 @@
 -export([start_link/0]).
 -export([add_node/1, get_node_params/1, get_all_nodes/0, remove_node/1]).
 -export([add_synapse/1, remove_synapse/1, get_all_synapses/0]).
+-export([get_point_neigbours/2]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -60,6 +61,9 @@ get_all_synapses()->
 remove_synapse(Synapse)->
   gen_server:cast(?SERVER, {remove_synapse, Synapse}).
 
+get_point_neigbours(Point, AtDistance) ->
+  gen_server:call(?SERVER, {get_neighbours, Point, AtDistance}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -71,7 +75,7 @@ remove_synapse(Synapse)->
 %% @end
 %%--------------------------------------------------------------------
 init([]) ->
-  ?Log(["init dojo_storage"]),
+  dojo_logger:log(["init dojo_storage"]),
   dets:open_file(nodes_table, [{keypos,#saved_node.id}]),
   dets:open_file(synapses_table, [{keypos, #saved_synapse.id}]),
   {ok, []}.
@@ -96,6 +100,23 @@ handle_call({get_all_nodes}, _From, State)->
 handle_call({get_all_synapses}, _From, State)->
   Reply = dets:match(synapses_table,'$1'),
   {reply, Reply, State};
+handle_call({get_neighbours, {X,Y,Z}, AtDistance}, _From, State)->
+   {MaxX,MaxY,MaxZ,MinX,MinY,MinZ} = {X+AtDistance, Y+AtDistance, Z+AtDistance, X-AtDistance, Y-AtDistance,Z-AtDistance},
+   Match =  [
+     {#saved_node{id = '$1', size = '_', position = {'$2','$3','$4'}, axon = '_'},
+     [{'and',
+       {'=<', '$2', MaxX},
+       {'=<', '$3', MaxY},
+       {'=<', '$4', MaxZ},
+       {'>=', '$2', MinX},
+       {'>=', '$3', MinY},
+       {'>=', '$4', MinZ}
+     }],
+     ['$$']}],
+
+  List = dets:select(nodes_table, Match),
+
+  {reply, List, State};
 handle_call(_Request, _From, State) ->
   {reply, ok, State}.
 %%--------------------------------------------------------------------

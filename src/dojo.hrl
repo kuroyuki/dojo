@@ -29,14 +29,4 @@
 -record(saved_synapse, {id, permability}).
 
 
--ifdef(debug_info).
--define(Log(Message),
-  (begin
-    %{{Year,Month,Day},{Hour,Minute,Second}}=calendar:now_to_local_time(now()),
-    %{_,_, Microsecond} = now(),
-    %io:format("~p/~p/~p ~p:~p:~p.~p : ~p : ~p~n", [Year,Month,Day,Hour,Minute,Second,Microsecond, self(), Message])
-     io:format("~p - ~p : ~p~n",[calendar:now_to_local_time(now()), self(), Message])
-  end)).
--else.
--define(Log(Message), ok).
--endif.
+

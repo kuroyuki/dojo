@@ -80,7 +80,7 @@ init([]) ->
   %start UDP server for IO
   {ok, UdpSocket} = gen_udp:open(?UDP_SERVER_PORT, [binary]),
 
-  ?Log(["init dojo_server"]),
+  dojo_logger:log(["init dojo_server"]),
   %we count nodfes start with 1, due to QHash specific behaviour with id 0
   {ok, #dojo_state{next_node=0, udp_socket=UdpSocket}}.
 %%--------------------------------------------------------------------
@@ -114,7 +114,7 @@ handle_call({bind_nodes, Source, Target}, _From, State) ->
       dojo_storage:add_synapse(SavedSynapse),
       {reply, ok, State};
     Any ->
-      ?Log(["synapse ",SavedSynapse," not added, reason ", Any]),
+      dojo_logger:log(["synapse ",SavedSynapse," not added, reason ", Any]),
       {reply, Any, State}
   end;
 
@@ -131,11 +131,11 @@ handle_cast({restore_dojo}, State) ->
   %restore saved nodes
   NodesList = dojo_storage:get_all_nodes(),
   NextNode = restore_nodes(NodesList, 0),
-  ?Log(["restored nodes ", NodesList]),
+  dojo_logger:log(["restored nodes ", NodesList]),
 
   %restore saved synapses
   SynapsesList = dojo_storage:get_all_synapses(),
-  ?Log(["restored synapses", SynapsesList]),
+  dojo_logger:log(["restored synapses", SynapsesList]),
   restore_synapses(SynapsesList),
 
   {noreply, State#dojo_state{next_node=NextNode}};
@@ -145,9 +145,9 @@ handle_cast( {add_sensor, SourceHostIp, TargetNodeId}, State) ->
 
   case start_synapse(SavedSynapse) of
     ok ->
-      ?Log(["sensor",SavedSynapse, " created"]);
+      dojo_logger:log(["sensor",SavedSynapse, " created"]);
     Any ->
-      ?Log(["sensor ",SavedSynapse, " not created, reason ", Any])
+      dojo_logger:log(["sensor ",SavedSynapse, " not created, reason ", Any])
   end,
   {noreply, State};
 handle_cast({add_actuator, SourceNodeId, TargetHostIp}, State) ->
@@ -155,9 +155,9 @@ handle_cast({add_actuator, SourceNodeId, TargetHostIp}, State) ->
   SavedSynapse = #saved_synapse{id={SourceNodeId, dojo_server}, permability = TargetHostIp},
    case start_synapse(SavedSynapse) of
     ok ->
-      ?Log(["actuator ",SavedSynapse," created"]);
+      dojo_logger:log(["actuator ",SavedSynapse," created"]);
     Any ->
-      ?Log(["actuator ",SavedSynapse," created, reason ", Any])
+      dojo_logger:log(["actuator ",SavedSynapse," created, reason ", Any])
   end,
   {noreply, State};
 handle_cast(_Request, State) ->
@@ -175,7 +175,7 @@ handle_info({udp, _Socket, Host, Port, Bin}, State) ->
 handle_info({ap, From}, State) ->
   case ets:lookup(udp_io, From) of
     [] ->
-      ?Log([From, " pid isn't register for UDP as output ~n"]),
+      dojo_logger:log([From, " pid isn't register for UDP as output ~n"]),
       not_found;
     [{udp_io, From, ClientIp, OutputId}] ->
       Bin = <<OutputId:32>>,
@@ -183,7 +183,7 @@ handle_info({ap, From}, State) ->
   end,
   {noreply, State};
 handle_info(Info, State) ->
-  ?Log(["unknown message ",Info]),
+  dojo_logger:log(["unknown message ",Info]),
   {noreply, State}.
 %%--------------------------------------------------------------------
 %% @private
@@ -305,7 +305,7 @@ parse_udp_binary(Bin) ->
   <<TargetId:32, RemainBin/binary>> = Bin,
   case ets:lookup(node_processes, TargetId) of
     [] ->
-      ?Log(["no pid found for id ", TargetId]),
+      dojo_logger:log(["no pid found for id ", TargetId]),
       not_found;
     [{node_process, TargetId, TargetPid}] ->
       TargetPid!{ap,self()}
