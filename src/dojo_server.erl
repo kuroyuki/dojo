@@ -18,11 +18,10 @@
 -export([add_node/2]).
 -export([register_sensor/2]).
 -export([register_actuator/2]).
-
--export([bind_nodes/2]).
+-export([bind_nodes/3]).
 
 %debug
--export([create_nodes/1]).
+-export([create_nodes/1,vision_test/0,negative_test/0]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -49,8 +48,8 @@ start_link() ->
 add_node(NodeCoords,AxonCoords)->
   gen_server:call(?SERVER, {add_node, NodeCoords, AxonCoords}).
 
-bind_nodes(Source,Target)->
-  gen_server:call(?SERVER, {bind_nodes, Source, Target}).
+bind_nodes(Source,Target, Coef)->
+ gen_server:call(?SERVER, {bind_nodes, Source, Target, Coef}).
 
 register_sensor(SourceHostIp, TargetNodeId)->
   gen_server:cast(?SERVER, {add_sensor, SourceHostIp, TargetNodeId}).
@@ -106,8 +105,8 @@ handle_call({add_node, NodeCoords, AxonCoords}, _From, State) ->
 
   {reply, ok, State#dojo_state{next_node = NodeId +1}};
 
-handle_call({bind_nodes, Source, Target}, _From, State) ->
-  SavedSynapse = #saved_synapse{id={Source,Target}, permability = 1},
+handle_call({bind_nodes, Source, Target, Coef}, _From, State) ->
+  SavedSynapse = #saved_synapse{id={Source,Target}, coefficient = Coef},
 
   case start_synapse(SavedSynapse) of
     ok ->
@@ -139,9 +138,9 @@ handle_cast({restore_dojo}, State) ->
   restore_synapses(SynapsesList),
 
   {noreply, State#dojo_state{next_node=NextNode}};
-handle_cast( {add_sensor, SourceHostIp, TargetNodeId}, State) ->
+handle_cast( {add_sensor, _SourceHostIp, TargetNodeId}, State) ->
 
-  SavedSynapse = #saved_synapse{id={dojo_server,TargetNodeId}, permability = 1},
+  SavedSynapse = #saved_synapse{id={dojo_server,TargetNodeId}, coefficient = 1},
 
   case start_synapse(SavedSynapse) of
     ok ->
@@ -152,7 +151,7 @@ handle_cast( {add_sensor, SourceHostIp, TargetNodeId}, State) ->
   {noreply, State};
 handle_cast({add_actuator, SourceNodeId, TargetHostIp}, State) ->
   %add source to node
-  SavedSynapse = #saved_synapse{id={SourceNodeId, dojo_server}, permability = TargetHostIp},
+  SavedSynapse = #saved_synapse{id={SourceNodeId, dojo_server}, coefficient = TargetHostIp},
    case start_synapse(SavedSynapse) of
     ok ->
       dojo_logger:log(["actuator ",SavedSynapse," created"]);
@@ -169,7 +168,7 @@ handle_cast(_Request, State) ->
 %%
 %% @end
 %%--------------------------------------------------------------------
-handle_info({udp, _Socket, Host, Port, Bin}, State) ->
+handle_info({udp, _Socket, _Host, _Port, Bin}, State) ->
   parse_udp_binary(Bin),
   {noreply, State};
 handle_info({ap, From}, State) ->
@@ -247,7 +246,7 @@ start_synapse(SavedSynapse)->
           %save source on target
           Source = #source{
             id = SourcePid,
-            permability = SavedSynapse#saved_synapse.permability,
+            coefficient = SavedSynapse#saved_synapse.coefficient,
             length = 0.5
           },
           TargetPid!{add_source, Source},
@@ -260,7 +259,7 @@ start_synapse(SavedSynapse)->
           not_found;
         [{node_process, dojo_server, TargetPid}] ->
           %save target IP on itself
-          ets:insert_new(udp_io, #udp_io{pid=SourcePid, udp_host = SavedSynapse#saved_synapse.permability, id=SourceId}),
+          ets:insert_new(udp_io, #udp_io{pid=SourcePid, udp_host = SavedSynapse#saved_synapse.coefficient, id=SourceId}),
            %save target on source
           SourcePid!{add_target, TargetPid},
           ok;
@@ -284,20 +283,13 @@ start_synapse(SavedSynapse)->
           %save source on target
           Source = #source{
             id = SourcePid,
-            permability = SavedSynapse#saved_synapse.permability,
+            coefficient = SavedSynapse#saved_synapse.coefficient,
             length = Length
           },
           TargetPid!{add_source, Source},
           ok
       end
   end.
-
-create_nodes(0) ->
-  ok;
-create_nodes(MaxNodes)->
-  add_node({random:uniform(1000), random:uniform(1000), random:uniform(1000)},
-    {random:uniform(1000),random:uniform(1000),random:uniform(1000)}),
-  create_nodes(MaxNodes-1).
 
 parse_udp_binary(<<>>) ->
   ok;
@@ -311,4 +303,40 @@ parse_udp_binary(Bin) ->
       TargetPid!{ap,self()}
   end,
   parse_udp_binary(RemainBin).
+
+create_nodes(0) ->
+  ok;
+create_nodes(MaxNodes)->
+  add_node({random:uniform(1000), random:uniform(1000), random:uniform(1000)},
+    {random:uniform(1000),random:uniform(1000),random:uniform(1000)}),
+  create_nodes(MaxNodes-1).
+
+vision_test()->
+  add_node({0,0,0},{0,0,2}),
+  add_node({2,0,0},{2,0,2}),
+  add_node({0,2,0},{0,2,2}),
+  add_node({2,2,0},{2,2,2}),
+
+  add_node({0,0,3},{0,0,6}),
+  add_node({1,0,3},{1,0,6}),
+  add_node({2,0,3},{2,0,6}),
+
+  add_node({0,1,3},{0,1,6}),
+  add_node({1,1,3},{1,1,6}),
+  add_node({2,1,3},{2,1,6}),
+
+  add_node({0,2,3},{0,2,6}),
+  add_node({1,2,3},{1,2,6}),
+  add_node({2,2,3},{2,2,6}).
+
+negative_test()->
+  add_node({0,0,0},{0,0,2}),
+  add_node({2,0,0},{2,0,2}),
+  add_node({1,0,3},{1,0,6}),
+  add_node({3,0,3},{3,0,6}),
+
+  bind_nodes(0,2,1),
+  bind_nodes(1,2,-1),
+  bind_nodes(1,3,1).
+
 

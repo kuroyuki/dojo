@@ -31,7 +31,8 @@ init(NodeSavedData)->
 
   %start targets seeking
   erlang:send_after(10000, self(), {find_targets, 2}),
-
+  %start nood loop
+  erlang:send_after(?NODE_TIMEOUT, self(), {timeout}),
   %run node loop
   loop(NodeData).
 %%%===================================================================
@@ -105,37 +106,39 @@ loop(Node)->
       SortedTargets = lists:foldr(LengthFun, [], PossibleTargets),
 
       SendFun = fun(X) ->
-        dojo_server:bind_nodes(Node#node.id, X)
+        dojo_server:bind_nodes(Node#node.id, X, 1)
       end,
       lists:foreach(SendFun, SortedTargets),
 
       %next iteration
       erlang:send_after(10000, self(), {find_targets, AtDistance}),
-      loop(Node)
+      loop(Node);
 
-  after 10 ->
+  {timeout} ->
     {UpdateSources, SynapticVoltage} = update_sources(Node#node.sources),
     NewVoltage = Node#node.voltage + SynapticVoltage,
 
     if NewVoltage >= ?VOLTAGE_THRESHOLD ->
-        generate_ap(Node#node.targets),
+        SendAp = fun(TargetPid)->
+          TargetPid!{ap, self()}
+        end,
+        lists:foreach(SendAp, Node#node.targets),
+        erlang:send_after(?NODE_TIMEOUT, self(), {timeout}),
         loop(Node#node{voltage = ?VOLTAGE_STEADY, sources = UpdateSources});
+
+      NewVoltage < -1 ->
+        erlang:send_after(?NODE_TIMEOUT, self(), {timeout}),
+        loop(Node#node{voltage = -1, sources = UpdateSources});
+
       NewVoltage < 1 ->
-        loop(Node#node{voltage = NewVoltage, sources = UpdateSources})
+        erlang:send_after(?NODE_TIMEOUT, self(), {timeout}),
+        loop(Node#node{voltage = NewVoltage*?PUMPING_CONST, sources = UpdateSources})
     end
   end.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-generate_ap([])->
-  ok;
-generate_ap(TargetList)->
-  [Target | RemainList] = TargetList,
-  %dojo_logger:log(["ap generated to ", Target]),
-  Target ! {ap, self()},
-  generate_ap(RemainList).
 
 update_sources([]) ->
   {[],0};
@@ -152,12 +155,15 @@ update_sources(UpdateList, SynapticVoltage, List)->
   case Source#source.cleft /= 0 of
     true ->
       %used voltage according to time course
-      SynVoltage = Source#source.cleft*(1-math:exp(Source#source.lastAP*?TIME_CONST)),
+      ReleasedTransmitter = Source#source.cleft*(1-math:exp(Source#source.lastAP*?TIME_CONST)),
       %substract used voltage from cleft and save reminder, update time after ap
-      UpdatedSource = Source#source{cleft = Source#source.cleft-SynVoltage, lastAP = Source#source.lastAP+10},
-      %%
+      UpdatedSource = Source#source{cleft = Source#source.cleft-ReleasedTransmitter, lastAP = Source#source.lastAP+10},
+
+      %%voltage changes from this synapse
+      SynVoltage = Source#source.coefficient*ReleasedTransmitter*math:exp(Source#source.length*?LENGTH_CONST),
+
       update_sources([UpdatedSource|UpdateList],
-        SynapticVoltage+SynVoltage*math:exp(Source#source.length*?LENGTH_CONST),
+        SynapticVoltage+SynVoltage,
         RemainList);
     %source has no voltage
     false ->

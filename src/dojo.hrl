@@ -12,7 +12,9 @@
 -define(VOLTAGE_STEADY, 0).
 
 -define(TIME_CONST, -0.02). %in format -1/50, where 50 is time const in ms
--define(LENGTH_CONST, -2). %in format -1/0.5, where 0.5 is length const in mm
+-define(LENGTH_CONST, -1). %in format -1/1, where 1 is length const in mm
+-define(PUMPING_CONST, 0.95).
+-define(NODE_TIMEOUT, 10).
 
 -define(TCP_SERVER_PORT, 5555).
 -define(UDP_CLIENT_PORT, 49389).
@@ -22,11 +24,11 @@
 
 -record(node_process, {id, process}).
 -record(node, {id, voltage=?VOLTAGE_STEADY, sources = [], targets = [], size, position, axon}).
--record(source, {id, length, permability, cleft=0, lastAP=1}).
+-record(source, {id, length, coefficient, terminals=1, cleft=0, lastAP=1}).
 -record(udp_io, {pid, udp_host, id}).
 
 -record(saved_node, {id, size, position, axon}).
--record(saved_synapse, {id, permability}).
+-record(saved_synapse, {id, coefficient}).
 
 
 
